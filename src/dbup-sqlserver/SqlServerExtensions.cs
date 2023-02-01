@@ -1,6 +1,10 @@
 ﻿using System;
 using System.Data;
+#if SUPPORTS_MICROSOFT_SQL_CLIENT
+using Microsoft.Data.SqlClient;
+#else
 using System.Data.SqlClient;
+#endif
 using DbUp;
 using DbUp.Builder;
 using DbUp.Engine.Output;
@@ -13,6 +17,7 @@ using DbUp.SqlServer;
 // NOTE: DO NOT MOVE THIS TO A NAMESPACE
 // Since the class just contains extension methods, we leave it in the global:: namespace so that it is always available
 // ReSharper disable CheckNamespace
+#pragma warning disable CA1050 // Declare types in namespaces
 public static class SqlServerExtensions
 // ReSharper restore CheckNamespace
 {
@@ -44,19 +49,21 @@ public static class SqlServerExtensions
     }
 
 #if SUPPORTS_AZURE_AD
-    /// <summary>
-    /// Creates an upgrader for SQL Server databases.
-    /// </summary>
+    /// <summary>Creates an upgrader for SQL Server databases.</summary>
     /// <param name="supported">Fluent helper type.</param>
     /// <param name="connectionString">The connection string.</param>
-    /// <param name="schema">The SQL schema name to use. Defaults to 'dbo' if null.</param>
+    /// <param name="schema">The SQL schema name to use. Defaults to 'dbo' if <see langword="null" />.</param>
     /// <param name="useAzureSqlIntegratedSecurity">Whether to use Azure SQL Integrated Security</param>
-    /// <returns>
-    /// A builder for a database upgrader designed for SQL Server databases.
-    /// </returns>
+    /// <returns>A builder for a database upgrader designed for SQL Server databases.</returns>
+    [Obsolete("Use \"AzureSqlDatabaseWithIntegratedSecurity(this SupportedDatabases, string, string)\" if passing \"true\" to \"useAzureSqlIntegratedSecurity\".")]
     public static UpgradeEngineBuilder SqlDatabase(this SupportedDatabases supported, string connectionString, string schema, bool useAzureSqlIntegratedSecurity)
     {
-        return SqlDatabase(new SqlConnectionManager(connectionString, useAzureSqlIntegratedSecurity), schema);
+        if (useAzureSqlIntegratedSecurity)
+        {
+            return supported.AzureSqlDatabaseWithIntegratedSecurity(connectionString, schema);
+        }
+
+        return supported.SqlDatabase(new SqlConnectionManager(connectionString), schema);
     }
 #endif
 
@@ -246,7 +253,7 @@ public static class SqlServerExtensions
             }
             catch (SqlException)
             {
-                // Failed to connect to master, lets try direct  
+                // Failed to connect to master, lets try direct
                 if (DatabaseExistsIfConnectedToDirectly(logger, connectionString, databaseName))
                     return;
 
@@ -379,7 +386,7 @@ public static class SqlServerExtensions
         masterConnectionStringBuilder.InitialCatalog = "master";
         var logMasterConnectionStringBuilder = new SqlConnectionStringBuilder(masterConnectionStringBuilder.ConnectionString)
         {
-            Password = string.Empty.PadRight(masterConnectionStringBuilder.Password.Length, '*')
+            Password = "******"
         };
 
         logger.WriteInformation("Master ConnectionString => {0}", logMasterConnectionStringBuilder.ConnectionString);
